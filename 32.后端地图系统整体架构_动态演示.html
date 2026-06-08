@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>第01集 后端地图系统整体架构动态演示</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #667085;
+      --line: #d7dce7;
+      --blue: #2563eb;
+      --green: #059669;
+      --amber: #d97706;
+      --red: #dc2626;
+      --violet: #7c3aed;
+      --cyan: #0891b2;
+      --shadow: 0 14px 36px rgba(31, 41, 55, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      padding: 18px 28px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(720px, 1fr) 390px;
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .stage,
+    .side {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 720px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid #c8d0df;
+      background: #fff;
+      color: var(--text);
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button.primary {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .step-counter {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      min-height: 560px;
+      padding: 14px;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      min-height: 560px;
+      display: block;
+      overflow: visible;
+    }
+
+    .lane {
+      fill: #fbfcff;
+      stroke: #e1e6ef;
+      stroke-width: 1;
+      rx: 8;
+    }
+
+    .lane-title {
+      fill: #667085;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .node rect {
+      fill: #fff;
+      stroke: #cfd6e4;
+      stroke-width: 1.5;
+      rx: 8;
+      filter: drop-shadow(0 8px 14px rgba(31, 41, 55, 0.10));
+    }
+
+    .node.active rect {
+      stroke-width: 3;
+    }
+
+    .node.client.active rect { stroke: var(--blue); }
+    .node.gate.active rect { stroke: var(--green); }
+    .node.control.active rect { stroke: var(--amber); }
+    .node.map.active rect { stroke: var(--violet); }
+    .node.sub.active rect { stroke: var(--cyan); }
+    .node.unit.active rect { stroke: var(--red); }
+
+    .node-title {
+      fill: var(--text);
+      font-size: 16px;
+      font-weight: 760;
+    }
+
+    .node-desc {
+      fill: var(--muted);
+      font-size: 12px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      fill: #fff;
+    }
+
+    .path {
+      fill: none;
+      stroke: #c9d2e3;
+      stroke-width: 3;
+      stroke-linecap: round;
+    }
+
+    .path.active {
+      stroke: var(--blue);
+      stroke-width: 4;
+      stroke-dasharray: 10 8;
+      animation: dash 0.7s linear infinite;
+    }
+
+    @keyframes dash {
+      to { stroke-dashoffset: -18; }
+    }
+
+    .packet {
+      fill: var(--blue);
+      stroke: #fff;
+      stroke-width: 3;
+      filter: drop-shadow(0 8px 12px rgba(37, 99, 235, 0.28));
+      opacity: 0;
+    }
+
+    .packet.show {
+      opacity: 1;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px 16px 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .side {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 720px;
+    }
+
+    .side-head {
+      padding: 18px 18px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .side h2 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    .side .goal {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      max-height: 240px;
+      overflow: auto;
+    }
+
+    .step-item {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 7px;
+      padding: 9px 10px;
+      font-size: 13px;
+      line-height: 1.45;
+      cursor: pointer;
+    }
+
+    .step-item.active {
+      border-color: var(--blue);
+      background: #eff6ff;
+    }
+
+    .detail {
+      padding: 16px 18px 18px;
+      overflow: auto;
+    }
+
+    .detail h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .detail p {
+      margin: 0 0 12px;
+      line-height: 1.75;
+      color: #344054;
+      font-size: 14px;
+    }
+
+    .detail ul {
+      margin: 0 0 14px;
+      padding-left: 18px;
+      color: #344054;
+      line-height: 1.75;
+      font-size: 14px;
+    }
+
+    .files {
+      margin-top: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    .file {
+      display: block;
+      margin-top: 7px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #344054;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 11px 12px;
+      border-left: 4px solid var(--amber);
+      background: #fffbeb;
+      color: #7c4a03;
+      font-size: 13px;
+      line-height: 1.65;
+      border-radius: 0 6px 6px 0;
+    }
+
+    @media (max-width: 1120px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .stage,
+      .side {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 760px) {
+      header {
+        padding: 14px 16px;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      main {
+        padding: 10px;
+      }
+
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .legend {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .canvas-wrap {
+        min-height: 500px;
+        overflow-x: auto;
+      }
+
+      svg {
+        width: 860px;
+        min-height: 500px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>第 1 集：后端地图系统整体架构动态演示</h1>
+      <div class="subtitle">客户端、Gate、MapControl、MapScene、SubScene、Unit 与 Roaming 的关系。</div>
+    </header>
+
+    <main>
+      <section class="stage" aria-label="架构动态图">
+        <div class="toolbar">
+          <div class="buttons">
+            <button class="primary" id="playBtn">自动播放</button>
+            <button id="prevBtn">上一步</button>
+            <button id="nextBtn">下一步</button>
+            <button id="resetBtn">重置</button>
+          </div>
+          <div class="step-counter" id="counter">步骤 1 / 8</div>
+        </div>
+
+        <div class="canvas-wrap">
+          <svg viewBox="0 0 1000 620" role="img" aria-label="服务端地图系统架构流程图">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#c9d2e3"></path>
+              </marker>
+              <marker id="arrowActive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"></path>
+              </marker>
+            </defs>
+
+            <rect class="lane" x="34" y="40" width="212" height="530"></rect>
+            <rect class="lane" x="276" y="40" width="212" height="530"></rect>
+            <rect class="lane" x="518" y="40" width="212" height="530"></rect>
+            <rect class="lane" x="760" y="40" width="206" height="530"></rect>
+
+            <text class="lane-title" x="54" y="66">客户端层</text>
+            <text class="lane-title" x="296" y="66">网关层</text>
+            <text class="lane-title" x="538" y="66">调度层</text>
+            <text class="lane-title" x="780" y="66">地图承载层</text>
+
+            <path id="p-client-gate" class="path" d="M 175 155 C 245 155, 270 155, 340 155" marker-end="url(#arrow)"></path>
+            <path id="p-gate-control" class="path" d="M 425 175 C 500 210, 515 250, 585 280" marker-end="url(#arrow)"></path>
+            <path id="p-control-map" class="path" d="M 660 300 C 730 300, 745 230, 815 210" marker-end="url(#arrow)"></path>
+            <path id="p-map-sub" class="path" d="M 875 245 C 875 285, 875 315, 875 355" marker-end="url(#arrow)"></path>
+            <path id="p-gate-sub" class="path" d="M 425 190 C 520 410, 720 425, 815 405" marker-end="url(#arrow)"></path>
+            <path id="p-sub-unit" class="path" d="M 875 435 C 875 468, 875 490, 875 518" marker-end="url(#arrow)"></path>
+            <path id="p-unit-gate" class="path" d="M 815 522 C 640 552, 465 360, 405 216" marker-end="url(#arrow)"></path>
+            <path id="p-gate-client-return" class="path" d="M 320 165 C 260 165, 230 165, 200 165" marker-end="url(#arrow)"></path>
+
+            <g id="node-client" class="node client" transform="translate(70 100)">
+              <rect width="130" height="96"></rect>
+              <circle cx="24" cy="28" r="13" fill="#2563eb"></circle>
+              <text class="badge" x="18" y="32">C</text>
+              <text class="node-title" x="46" y="31">客户端</text>
+              <text class="node-desc" x="18" y="60">选择角色</text>
+              <text class="node-desc" x="18" y="78">加载地图</text>
+            </g>
+
+            <g id="node-gate" class="node gate" transform="translate(320 120)">
+              <rect width="130" height="96"></rect>
+              <circle cx="24" cy="28" r="13" fill="#059669"></circle>
+              <text class="badge" x="18" y="32">G</text>
+              <text class="node-title" x="46" y="31">Gate</text>
+              <text class="node-desc" x="18" y="60">校验账号</text>
+              <text class="node-desc" x="18" y="78">创建 Roaming</text>
+            </g>
+
+            <g id="node-control" class="node control" transform="translate(560 250)">
+              <rect width="150" height="104"></rect>
+              <circle cx="24" cy="28" r="13" fill="#d97706"></circle>
+              <text class="badge" x="16" y="32">MC</text>
+              <text class="node-title" x="48" y="31">MapControl</text>
+              <text class="node-desc" x="18" y="61">负载队列</text>
+              <text class="node-desc" x="18" y="80">分线调度</text>
+            </g>
+
+            <g id="node-map" class="node map" transform="translate(810 168)">
+              <rect width="130" height="96"></rect>
+              <circle cx="24" cy="28" r="13" fill="#7c3aed"></circle>
+              <text class="badge" x="18" y="32">M</text>
+              <text class="node-title" x="46" y="31">MapScene</text>
+              <text class="node-desc" x="18" y="60">创建分线</text>
+              <text class="node-desc" x="18" y="78">缓存线表</text>
+            </g>
+
+            <g id="node-sub" class="node sub" transform="translate(810 360)">
+              <rect width="130" height="96"></rect>
+              <circle cx="24" cy="28" r="13" fill="#0891b2"></circle>
+              <text class="badge" x="15" y="32">S</text>
+              <text class="node-title" x="46" y="31">SubScene</text>
+              <text class="node-desc" x="18" y="60">具体分线</text>
+              <text class="node-desc" x="18" y="78">承载玩家</text>
+            </g>
+
+            <g id="node-unit" class="node unit" transform="translate(810 500)">
+              <rect width="130" height="72"></rect>
+              <circle cx="24" cy="26" r="13" fill="#dc2626"></circle>
+              <text class="badge" x="18" y="30">U</text>
+              <text class="node-title" x="46" y="30">Unit</text>
+              <text class="node-desc" x="18" y="55">玩家地图实体</text>
+            </g>
+
+            <circle id="packet" class="packet" r="11" cx="135" cy="155"></circle>
+          </svg>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><span class="dot" style="background:#2563eb"></span>客户端请求</div>
+          <div class="legend-item"><span class="dot" style="background:#059669"></span>Gate 入口</div>
+          <div class="legend-item"><span class="dot" style="background:#d97706"></span>中控调度</div>
+          <div class="legend-item"><span class="dot" style="background:#0891b2"></span>地图分线</div>
+        </div>
+      </section>
+
+      <aside class="side" aria-label="步骤说明">
+        <div class="side-head">
+          <h2 id="stepTitle">客户端选择角色</h2>
+          <div class="goal" id="stepGoal">玩家登录 Gate 后，还需要选择一个角色，才会进入真正的地图世界。</div>
+        </div>
+        <div class="step-list" id="stepList"></div>
+        <div class="detail">
+          <h3>本步目标</h3>
+          <p id="stepBody"></p>
+          <ul id="stepBullets"></ul>
+          <div class="files">
+            <strong>关联文件</strong>
+            <span class="file" id="fileOne"></span>
+            <span class="file" id="fileTwo"></span>
+          </div>
+          <div class="note" id="stepNote"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        title: "客户端选择角色",
+        goal: "玩家登录 Gate 后，还需要选择一个角色，才会进入真正的地图世界。",
+        body: "第一集要先讲清楚：账号登录只解决身份问题，选择角色进入游戏才会触发地图系统。客户端发送 C2G_EnterGameRequest，里面最关键的参数是 RoleId。",
+        bullets: ["客户端不直接连接地图分线。", "Gate 先校验当前账号能否使用这个角色。", "RoleId 是进入地图流程的起点。"],
+        nodes: ["client"],
+        paths: [],
+        packet: [135, 155],
+        files: ["Proto/Outer/OuterMessage.proto", "Server/Hotfix/Scene/Gate/Handler/C2G_EnterGameHandler.cs"],
+        note: "登录 Gate 只代表账号进入网关；进入游戏必须先选择角色，然后才会触发地图系统。"
+      },
+      {
+        title: "现实类比：调度大厅和具体场馆",
+        goal: "用现实中的场馆调度理解 MapControl、MapScene 和 SubScene 的区别。",
+        body: "可以把 MapControl 理解成大型游乐园或展会的总调度大厅。它自己不接待游客，只看每个场馆的人数，然后决定新来的玩家应该去哪个具体场馆。MapScene 像一个具体场馆，比如新手城堡、野外荒岛、主城；SubScene 则是这个场馆里的一条具体分线。",
+        bullets: ["MapControl 只负责调度，不承载玩家。", "MapScene 代表具体地图服务器，可以创建多条分线。", "一个玩家同一时间只能在一个具体地图分线里，不可能同时存在于多个地图。"],
+        nodes: ["control", "map", "sub", "unit"],
+        paths: ["p-control-map", "p-map-sub", "p-sub-unit"],
+        packet: [875, 518],
+        files: ["Server/Entity/Scene/Map/MapControlScene/MapControlManagerComponent.cs", "Server/Entity/Scene/Map/MapScene/MapLine/MapLineComponent.cs"],
+        note: "玩家传送可以理解为离开一个具体场馆房间，再进入另一个具体场馆房间。"
+      },
+      {
+        title: "现实类比：学校、宿舍楼和宿舍房间",
+        goal: "用学校宿舍来理解 MapControl、MapScene 和 SubScene 的层级关系。",
+        body: "也可以把整个系统理解成学校宿舍管理。MapControl 像教务处或宿管中心，负责给学生分配住哪栋楼、哪间宿舍；MapScene 像一栋宿舍楼，负责管理这栋楼有哪些房间；SubScene 像具体宿舍房间，学生真正住在这里。一个学生同一时间只能住在一间宿舍房间里，不可能同时住在多个房间里。",
+        bullets: ["MapControl 负责分配，不住人。", "MapScene 对应一栋宿舍楼，下面可以有多间房。", "SubScene 是一间具体房间，玩家同一时间只能在一间房里。"],
+        nodes: ["control", "map", "sub", "unit"],
+        paths: ["p-control-map", "p-map-sub", "p-sub-unit"],
+        packet: [875, 518],
+        files: ["Server/Entity/Scene/Map/MapControlScene/MapControlManagerComponent.cs", "Server/Entity/Scene/Map/MapScene/MapLine/MapLineComponent.cs"],
+        note: "这个类比适合拿来解释分线和传送：换宿舍房间，就像从一条分线切到另一条分线。"
+      },
+      {
+        title: "Gate 校验并创建 Roaming",
+        goal: "Gate 校验角色归属后，为当前 Session 创建或复用 Roaming。",
+        body: "Gate 是进入地图前的网关。它不承载地图玩家，只负责账号、角色和连接入口。进入游戏时，Gate 会调用 GameAccount.Online，并通过 Roaming 把连接引向地图分线。",
+        bullets: ["校验角色是否属于当前账号。", "首次进入时创建新的 Roaming。", "断线重连时复用已有 Roaming。"],
+        nodes: ["client", "gate"],
+        paths: ["p-client-gate"],
+        packet: [340, 155],
+        files: ["Server/Hotfix/Scene/Gate/System/GameAccount/GameAccountSystem.cs", "Server/Entity/Scene/Gate/Account/GameAccount.cs"],
+        note: "Roaming 可以理解为 Gate 到 Map 的连接桥，后续地图消息会通过这条桥路由到玩家 Unit。"
+      },
+      {
+        title: "Gate 请求 MapControl 分配分线",
+        goal: "Gate 不自己决定去哪条线，而是向 MapControl 请求目标地图的可用分线。",
+        body: "MapControl 是地图中控。Gate 只知道玩家要进入哪张地图，具体去哪台 MapScene、哪条分线，由 MapControl 统一调度。",
+        bullets: ["MapControl 维护所有 MapScene 的负载。", "按 MapConfigId 管理每张地图的分线。", "返回最终的 MapLineSubSceneAddress。"],
+        nodes: ["gate", "control"],
+        paths: ["p-gate-control"],
+        packet: [585, 280],
+        files: ["Server/Hotfix/Scene/Map/Shared/MapHelper.cs", "Server/Hotfix/Scene/Map/MapControlScene/System/MapControlManagerComponentSystem.cs"],
+        note: "Gate 不负责地图调度；所有地图分线选择都集中在 MapControl，职责边界更清晰。"
+      },
+      {
+        title: "MapControl 选择低负载 MapScene",
+        goal: "MapControl 从负载队列中选出最适合承载分线的 MapScene。",
+        body: "MapControl 使用 PriorityQueue 保存所有 MapScene。人数越少，越优先被选择。这样可以让新分线尽量分布到负载低的地图服务器上。它像总调度大厅，只决定玩家去哪里，不会让玩家真正停留在自己这里。",
+        bullets: ["MapScenes 是按人数排序的优先队列。", "UpdateMapScene 会重新计算真实负载。", "MapControl 自己不承载玩家。"],
+        nodes: ["control"],
+        paths: [],
+        packet: [635, 300],
+        files: ["Server/Entity/Scene/Map/MapControlScene/MapControlManagerComponent.cs", "Server/Hotfix/Scene/Map/MapControlScene/System/MapControlManagerComponentSystem.cs"],
+        note: "MapControl 是调度中心，不是地图服务器；它负责分配分线，但不承载玩家 Unit。"
+      },
+      {
+        title: "MapScene 创建 SubScene 分线",
+        goal: "如果没有可复用分线，MapControl 会请求 MapScene 创建新的 SubScene。",
+        body: "MapScene 是顶级地图服务器。它收到 MC2M_RequestMapRequest 后，创建一个 SubScene。这个 SubScene 才是具体的一条地图分线。玩家同一时间只能在一条具体分线中，切线或传送就是从一个 SubScene 迁移到另一个 SubScene。",
+        bullets: ["MapScene 管理本机创建出来的分线。", "SubScene 挂载 MapLineComponent。", "MapLineComponent 记录地图 ID、线号和中控地址。"],
+        nodes: ["control", "map", "sub"],
+        paths: ["p-control-map", "p-map-sub"],
+        packet: [875, 355],
+        files: ["Server/Hotfix/Scene/Map/MapScene/System/MapLine/MapLineManageComponentSystem.cs", "Server/Entity/Scene/Map/MapScene/MapLine/MapLineComponent.cs"],
+        note: "MapScene 管理分线，SubScene 承载具体玩家；两者都属于地图层，但职责不同。"
+      },
+      {
+        title: "Roaming Link 到目标 SubScene",
+        goal: "Gate 拿到分线地址后，通过 Roaming 把玩家连接 Link 到目标 SubScene。",
+        body: "Role.Transfer 会携带 MaoRoamingArgs 连接到目标 MapLineSubSceneAddress。Map 侧收到 Link 后，触发 OnCreateTerminusEvent_Map。",
+        bullets: ["MaoRoamingArgs 携带 RoleId、Name、Level、MapConfigId、UnitConfigId。", "Map 侧通过 OnCreateTerminus 接收连接。", "后续客户端地图消息会路由到 Unit。"],
+        nodes: ["gate", "sub"],
+        paths: ["p-gate-sub"],
+        packet: [815, 405],
+        files: ["Server/Hotfix/Scene/Map/Shared/Transfer/TransferHelper.cs", "Server/Hotfix/Scene/Map/MapScene/OnCreateTerminusEvent_Map.cs"],
+        note: "Roaming Link 完成后，客户端仍连接 Gate，但地图消息可以被转发到目标地图分线。"
+      },
+      {
+        title: "SubScene 创建或加载 Unit",
+        goal: "玩家进入具体分线后，服务端加载或创建地图里的玩家实体 Unit。",
+        body: "Unit 是玩家在地图中的运行时实体。它保存玩家位置、朝向、地图 ID、Unit 配置 ID 和在线状态。所有移动、广播、传送都会围绕 Unit 进行。",
+        bullets: ["Unit.Id 使用 RoleId。", "MapUnitManageComponent 管理当前分线所有 Unit。", "绑定 Terminus 后客户端消息才能路由到 Unit。"],
+        nodes: ["sub", "unit"],
+        paths: ["p-sub-unit"],
+        packet: [875, 518],
+        files: ["Server/Entity/Scene/Map/MapScene/Unit/Unit.cs", "Server/Hotfix/Scene/Map/Shared/MapHelper.cs"],
+        note: "Role 是角色数据，Unit 是地图里的玩家对象；进入地图后，移动、广播和传送都围绕 Unit 进行。"
+      },
+      {
+        title: "客户端消息通过 Gate 转发到 Unit",
+        goal: "客户端发给 Unit 的地图消息，不是直连 Unit，而是先到 Gate，再由 Gate 转发给当前绑定的 Unit。",
+        body: "玩家虽然已经进入地图，但客户端仍然连接在 Gate 上。所以客户端发给 Unit 的协议请求，会先经过 Gate，Gate 再把消息转发到当前绑定的 Unit。这样客户端和地图分线之间始终保持一条稳定的入口。",
+        bullets: ["客户端消息先到 Gate，不直接到 Unit。", "Gate 根据当前绑定关系把消息转发到当前 Unit。", "进入地图后，客户端和 Unit 之间仍然保留网关这一层。"],
+        nodes: ["client", "gate", "sub", "unit"],
+        paths: ["p-client-gate", "p-gate-sub", "p-sub-unit"],
+        packet: [405, 165],
+        files: ["Server/Hotfix/Scene/Map/MapScene/Handler/Outer/Move/C2M_StartMovingHandler.cs", "Server/Hotfix/Scene/Map/MapScene/Handler/Outer/Map/C2M_InitCompleteHandler.cs"],
+        note: "客户端到 Unit 的所有消息，都要经过 Gate 转发；这一层在 MMO 里非常关键。"
+      },
+      {
+        title: "通过 Gate 转发地图初始化消息",
+        goal: "Unit 绑定完成后，Map 侧消息通过 Gate 转发给客户端，客户端加载地图后再请求初始化。",
+        body: "客户端的真实连接仍然在 Gate 上。Map/Unit 侧发送 M2C_OnMapCreate 时，会通过绑定的 Terminus 和 ForwardSessionAddress 转发到 Gate，再由 Gate 发给客户端。客户端加载地图完成后发送 C2M_InitCompleteRequest，也会通过 Gate 转发回当前 Unit。",
+        bullets: ["M2C_OnMapCreate 不是 Unit 直连客户端，而是经 Gate 转发。", "C2M_InitCompleteRequest 返回 Map 时也经过 Gate。", "当前 AOI 暂时用全地图玩家代替。"],
+        nodes: ["unit", "gate", "client"],
+        paths: ["p-unit-gate", "p-gate-client-return"],
+        packet: [200, 165],
+        files: ["Server/Hotfix/Scene/Map/MapScene/Handler/Outer/Map/C2M_InitCompleteHandler.cs", "Server/Hotfix/Scene/Map/MapScene/BroadcastHelper.cs"],
+        note: "这一阶段只关注进入地图主链路；移动、传送和合线会在后续章节继续展开。"
+      }
+    ];
+
+    const nodeMap = {
+      client: document.getElementById("node-client"),
+      gate: document.getElementById("node-gate"),
+      control: document.getElementById("node-control"),
+      map: document.getElementById("node-map"),
+      sub: document.getElementById("node-sub"),
+      unit: document.getElementById("node-unit")
+    };
+
+    const allPaths = Array.from(document.querySelectorAll(".path"));
+    const packet = document.getElementById("packet");
+    const title = document.getElementById("stepTitle");
+    const goal = document.getElementById("stepGoal");
+    const body = document.getElementById("stepBody");
+    const bullets = document.getElementById("stepBullets");
+    const fileOne = document.getElementById("fileOne");
+    const fileTwo = document.getElementById("fileTwo");
+    const note = document.getElementById("stepNote");
+    const counter = document.getElementById("counter");
+    const stepList = document.getElementById("stepList");
+    const playBtn = document.getElementById("playBtn");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    let current = 0;
+    let timer = null;
+
+    function buildStepList() {
+      stepList.innerHTML = "";
+      steps.forEach((step, index) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "step-item";
+        item.textContent = `${String(index + 1).padStart(2, "0")}  ${step.title}`;
+        item.addEventListener("click", () => {
+          stopPlay();
+          render(index);
+        });
+        stepList.appendChild(item);
+      });
+    }
+
+    function render(index) {
+      current = Math.max(0, Math.min(index, steps.length - 1));
+      const step = steps[current];
+
+      Object.values(nodeMap).forEach(node => node.classList.remove("active"));
+      step.nodes.forEach(name => nodeMap[name].classList.add("active"));
+
+      allPaths.forEach(path => {
+        path.classList.remove("active");
+        path.setAttribute("marker-end", "url(#arrow)");
+      });
+
+      step.paths.forEach(id => {
+        const path = document.getElementById(id);
+        path.classList.add("active");
+        path.setAttribute("marker-end", "url(#arrowActive)");
+      });
+
+      packet.classList.add("show");
+      packet.setAttribute("cx", step.packet[0]);
+      packet.setAttribute("cy", step.packet[1]);
+
+      title.textContent = step.title;
+      goal.textContent = step.goal;
+      body.textContent = step.body;
+      bullets.innerHTML = "";
+      step.bullets.forEach(text => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        bullets.appendChild(li);
+      });
+      fileOne.textContent = step.files[0];
+      fileTwo.textContent = step.files[1];
+      note.textContent = step.note;
+      counter.textContent = `步骤 ${current + 1} / ${steps.length}`;
+
+      Array.from(stepList.children).forEach((item, itemIndex) => {
+        item.classList.toggle("active", itemIndex === current);
+      });
+
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current === steps.length - 1;
+    }
+
+    function next() {
+      if (current >= steps.length - 1) {
+        stopPlay();
+        return;
+      }
+      render(current + 1);
+    }
+
+    function prev() {
+      render(current - 1);
+    }
+
+    function stopPlay() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      playBtn.textContent = "自动播放";
+      playBtn.classList.add("primary");
+    }
+
+    function togglePlay() {
+      if (timer) {
+        stopPlay();
+        return;
+      }
+
+      playBtn.textContent = "暂停";
+      playBtn.classList.remove("primary");
+      timer = setInterval(() => {
+        if (current >= steps.length - 1) {
+          stopPlay();
+          return;
+        }
+        next();
+      }, 2600);
+    }
+
+    playBtn.addEventListener("click", togglePlay);
+    prevBtn.addEventListener("click", () => {
+      stopPlay();
+      prev();
+    });
+    nextBtn.addEventListener("click", () => {
+      stopPlay();
+      next();
+    });
+    resetBtn.addEventListener("click", () => {
+      stopPlay();
+      render(0);
+    });
+
+    buildStepList();
+    render(0);
+  </script>
+</body>
+</html>
